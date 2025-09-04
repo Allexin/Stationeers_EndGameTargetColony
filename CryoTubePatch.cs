@@ -22,7 +22,6 @@ namespace EndGameTargetColony
         {
             public float timer = 0f;
             public bool isCloning = false;
-            public bool hasCompleted = false; // Флаг что клонирование уже завершено
             public float maxDuration;
             public float lastUpdateTime = 0f;
             
@@ -58,10 +57,10 @@ namespace EndGameTargetColony
             // Логируем состояние каждые 5 секунд для отладки
             if (Time.fixedTime % 5f < Time.fixedDeltaTime)
             {
-                Debug.Log($"CryoTube state: canClone={canClone}, isCloning={state.isCloning}, hasCompleted={state.hasCompleted}, timer={state.timer:F1}");
+                Debug.Log($"CryoTube state: canClone={canClone}, isCloning={state.isCloning}, timer={state.timer:F1}");
             }
             
-            if (canClone && !state.hasCompleted)
+            if (canClone)
             {
                 if (!state.isCloning)
                 {
@@ -78,19 +77,17 @@ namespace EndGameTargetColony
                 // Не даем таймеру уйти в отрицательные значения
                 state.timer = Mathf.Max(state.timer, 0f);
                 
-                if (state.timer <= 0f && !state.hasCompleted)
+                if (state.timer <= 0f)
                 {
-                    // Клонирование завершено - сначала сбрасываем состояние, потом создаем курицу
-                    state.hasCompleted = true; // Помечаем что клонирование завершено
-                    ResetCloning(state);
+                    // Клонирование завершено - создаем курицу и выключаем трубу
                     CompleteCloning(__instance);
+                    ResetCloning(state);
                 }
             }
             else if (!canClone)
             {
                 // Условия не выполнены - полностью сбрасываем состояние
                 state.isCloning = false;
-                state.hasCompleted = false; // Сбрасываем флаг завершения
                 state.maxDuration = EndGameTargetColonyMod.CloningDuration.Value;
                 state.timer = state.maxDuration; // Сбрасываем на 0% прогресса
                 state.lastUpdateTime = Time.time;
@@ -130,32 +127,142 @@ namespace EndGameTargetColony
                 // Создаем базовое существо (курицу) как первый этап НПЦ системы
                 NPCSpawner.SpawnNPC(cryoTube.transform.position);
                 
-                // Открываем дверь после завершения клонирования
-                if (!cryoTube.IsOpen)
-                {
-                    // Пытаемся найти и вызвать метод для открытия двери
-                    var openField = typeof(CryoTube).GetField("Open", BindingFlags.Public | BindingFlags.Instance);
-                    if (openField != null)
-                    {
-                        var openSwitch = openField.GetValue(cryoTube);
-                        if (openSwitch != null)
-                        {
-                            // Устанавливаем состояние "включено" для переключателя открытия
-                            var onProperty = openSwitch.GetType().GetProperty("On");
-                            if (onProperty != null)
-                            {
-                                onProperty.SetValue(openSwitch, true);
-                                Debug.Log("CryoTube door opened after cloning completion");
-                            }
-                        }
-                    }
-                    
-                }
+                // Пытаемся разными способами выключить трубу и открыть дверь
+                TryPowerOffCryoTube(cryoTube);
+                TryOpenCryoTubeDoor(cryoTube);
             }
             catch (System.Exception e)
             {
                 Debug.LogError($"Error in CompleteCloning: {e.Message}");
                 Debug.LogError($"Stack trace: {e.StackTrace}");
+            }
+        }
+        
+        private static void TryPowerOffCryoTube(CryoTube cryoTube)
+        {
+            try
+            {
+                Debug.Log($"TryPowerOffCryoTube: Current Powered state = {cryoTube.Powered}");
+                
+                if (!cryoTube.Powered)
+                {
+                    Debug.Log("CryoTube is already powered off");
+                    return;
+                }
+                
+                // Метод 1: Попробуем напрямую через свойство (если доступно для записи)
+                try
+                {
+                    var poweredProperty = typeof(CryoTube).GetProperty("Powered", BindingFlags.Public | BindingFlags.Instance);
+                    if (poweredProperty != null && poweredProperty.CanWrite)
+                    {
+                        poweredProperty.SetValue(cryoTube, false);
+                        Debug.Log("Method 1: Successfully set Powered = false");
+                        return;
+                    }
+                    else
+                    {
+                        Debug.Log("Method 1: Powered property not writable or not found");
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Method 1 failed: {e.Message}");
+                }
+                
+                // Метод 2: Поиск через все поля
+                var allFields = typeof(CryoTube).GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                Debug.Log($"Found {allFields.Length} fields in CryoTube");
+                
+                foreach (var field in allFields)
+                {
+                    Debug.Log($"Field: {field.Name}, Type: {field.FieldType}");
+                    if (field.Name.ToLower().Contains("onoff") || field.Name.ToLower().Contains("power"))
+                    {
+                        Debug.Log($"Found potential power field: {field.Name}");
+                        var value = field.GetValue(cryoTube);
+                        if (value != null)
+                        {
+                            Debug.Log($"Field {field.Name} value type: {value.GetType()}");
+                            var onProperty = value.GetType().GetProperty("On");
+                            if (onProperty != null && onProperty.CanWrite)
+                            {
+                                onProperty.SetValue(value, false);
+                                Debug.Log($"Method 2: Successfully turned off via {field.Name}.On");
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                Debug.LogWarning("Failed to find a way to power off CryoTube");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in TryPowerOffCryoTube: {e.Message}");
+            }
+        }
+        
+        private static void TryOpenCryoTubeDoor(CryoTube cryoTube)
+        {
+            try
+            {
+                Debug.Log($"TryOpenCryoTubeDoor: Current IsOpen state = {cryoTube.IsOpen}");
+                
+                if (cryoTube.IsOpen)
+                {
+                    Debug.Log("CryoTube door is already open");
+                    return;
+                }
+                
+                // Метод 1: Попробуем напрямую через свойство (если доступно для записи)
+                try
+                {
+                    var isOpenProperty = typeof(CryoTube).GetProperty("IsOpen", BindingFlags.Public | BindingFlags.Instance);
+                    if (isOpenProperty != null && isOpenProperty.CanWrite)
+                    {
+                        isOpenProperty.SetValue(cryoTube, true);
+                        Debug.Log("Method 1: Successfully set IsOpen = true");
+                        return;
+                    }
+                    else
+                    {
+                        Debug.Log("Method 1: IsOpen property not writable or not found");
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Method 1 failed: {e.Message}");
+                }
+                
+                // Метод 2: Поиск через все поля
+                var allFields = typeof(CryoTube).GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                
+                foreach (var field in allFields)
+                {
+                    if (field.Name.ToLower().Contains("open") || field.Name.ToLower().Contains("door"))
+                    {
+                        Debug.Log($"Found potential door field: {field.Name}");
+                        var value = field.GetValue(cryoTube);
+                        if (value != null)
+                        {
+                            Debug.Log($"Field {field.Name} value type: {value.GetType()}");
+                            var onProperty = value.GetType().GetProperty("On");
+                            if (onProperty != null && onProperty.CanWrite)
+                            {
+                                onProperty.SetValue(value, true);
+                                Debug.Log($"Method 2: Successfully opened via {field.Name}.On");
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                Debug.LogWarning("Failed to find a way to open CryoTube door");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in TryOpenCryoTubeDoor: {e.Message}");
             }
         }
         
@@ -165,7 +272,6 @@ namespace EndGameTargetColony
             state.maxDuration = EndGameTargetColonyMod.CloningDuration.Value; // Обновляем из конфига
             state.timer = state.maxDuration; // После завершения таймер сбрасывается на максимум (0% прогресса)
             state.lastUpdateTime = Time.time; // Обновляем время последнего обновления
-            // НЕ сбрасываем hasCompleted - это предотвратит повторное клонирование
         }
         
         private static void UpdateDisplay(CryoTube cryoTube, CloningState state)
@@ -213,14 +319,9 @@ namespace EndGameTargetColony
             
             string baseStatus = $"Timer: {state.timer:F1}s Progress: {progress:F0}%";
             
-            if (state.hasCompleted)
-            {
-                return baseStatus + " - Completed";
-            }
-            
             if (state.isCloning)
             {
-                return baseStatus + " - Creating NPC";
+                return baseStatus + " - Cloning";
             }
             
             // Проверяем условия и показываем что не так
