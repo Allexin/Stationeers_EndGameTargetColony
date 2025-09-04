@@ -1,7 +1,9 @@
 using UnityEngine;
 using Assets.Scripts.Objects;
 using Assets.Scripts.Objects.Entities;
+using Assets.Scripts.Objects.Items;
 using Assets.Scripts.Networking;
+using Assets.Scripts;
 
 namespace EndGameTargetColony
 {
@@ -11,70 +13,81 @@ namespace EndGameTargetColony
         {
             try
             {
-                // Ищем префаб курицы
-                // В Stationeers курицы могут быть представлены как Animal или специальный тип
-                GameObject chickenPrefab = FindNPCBasePrefab();
+                Debug.Log("SpawnNPC called - starting spawn process");
                 
-                if (chickenPrefab != null)
+                // Проверяем что мы на сервере (как в FertilizedEgg.Hatch)
+                if (!GameManager.RunSimulation)
                 {
-                    // Создаем НПЦ (базовое существо) в мире
+                    Debug.LogWarning("Cannot spawn NPC: GameManager.RunSimulation is false");
+                    return;
+                }
+                
+                Debug.Log("GameManager.RunSimulation check passed");
+                
+                // Спавним FertilizedEgg который вылупится через 5 секунд
+                DynamicThing eggPrefab = FindFertilizedEggPrefab();
+                
+                if (eggPrefab != null)
+                {
+                    Debug.Log($"FertilizedEgg prefab found: {eggPrefab.name}");
+                    
+                    // Создаем FertilizedEgg в мире
                     Vector3 spawnPosition = FindSafeSpawnPosition(position);
-                    GameObject npc = Object.Instantiate(chickenPrefab, spawnPosition, Quaternion.identity);
                     
-                    // Инициализируем НПЦ
-                    InitializeNPC(npc);
+                    Debug.Log($"Spawn position calculated: {spawnPosition}");
                     
-                    Debug.Log($"NPC Phase 1: Base creature spawned at position: {spawnPosition}");
+                    // Используем OnServer.CreateOld как в FertilizedEgg.Hatch()
+                    Debug.Log("About to call OnServer.CreateOld...");
+                    OnServer.CreateOld(eggPrefab, spawnPosition, Quaternion.identity, 0uL);
+                    Debug.Log($"NPC Phase 1: FertilizedEgg spawned successfully at position: {spawnPosition}");
                 }
                 else
                 {
-                    Debug.LogError("NPC base prefab not found!");
+                    Debug.LogError("FertilizedEgg prefab not found!");
                 }
             }
             catch (System.Exception e)
             {
                 Debug.LogError($"Error spawning NPC: {e.Message}");
+                Debug.LogError($"Stack trace: {e.StackTrace}");
             }
         }
         
-        private static GameObject FindNPCBasePrefab()
+        private static DynamicThing FindFertilizedEggPrefab()
         {
-            // Попытка найти базовый префаб для НПЦ (курица как основа) через различные методы
-            
-            // Метод 1: Поиск через Resources
-            GameObject prefab = Resources.Load<GameObject>("Prefabs/Animals/Chicken");
-            if (prefab != null) return prefab;
-            
-            // Метод 2: Поиск через существующих животных в мире
-            Animal[] existingAnimals = Object.FindObjectsOfType<Animal>();
-            foreach (var animal in existingAnimals)
+            try
             {
-                if (animal.name.ToLower().Contains("chicken") || 
-                    animal.GetType().Name.ToLower().Contains("chicken"))
+                // Ищем префаб FertilizedEgg
+                
+                // Поиск через Prefab.Find по имени
+                var eggPrefab = Prefab.Find("FertilizedEgg");
+                if (eggPrefab != null)
                 {
-                    return animal.gameObject;
+                    Debug.Log("Found FertilizedEgg prefab through Prefab.Find");
+                    return eggPrefab as DynamicThing;
                 }
+                
+                // Альтернативный поиск среди всех DynamicThing префабов
+                foreach (var prefab in DynamicThing.DynamicThingPrefabs)
+                {
+                    if (prefab.name.Contains("FertilizedEgg") || prefab.name.Contains("Egg"))
+                    {
+                        Debug.Log($"Found Egg prefab in DynamicThingPrefabs: {prefab.name}");
+                        return prefab;
+                    }
+                }
+                
+                Debug.LogWarning("FertilizedEgg prefab not found in any lookup method");
+                return null;
             }
-            
-            // Метод 3: Создание базового животного (fallback)
-            // Это может потребовать дополнительной настройки
-            return CreateBasicAnimalPrefab();
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error finding FertilizedEgg prefab: {e.Message}");
+                return null;
+            }
         }
         
-        private static GameObject CreateBasicAnimalPrefab()
-        {
-            // Создаем базовый объект животного
-            GameObject animalObj = new GameObject("BasicNPC");
-            
-            // Добавляем базовый компонент Animal
-            var animal = animalObj.AddComponent<Animal>();
-            
-            // Настраиваем животное
-            // Здесь могут потребоваться дополнительные настройки
-            // в зависимости от API Animal класса
-            
-            return animalObj;
-        }
+
         
         private static Vector3 FindSafeSpawnPosition(Vector3 basePosition)
         {
@@ -115,21 +128,6 @@ namespace EndGameTargetColony
             return true;
         }
         
-        private static void InitializeNPC(GameObject npc)
-        {
-            // Инициализируем базовое существо для будущего НПЦ
-            var animalComponent = npc.GetComponent<Animal>();
-            if (animalComponent != null)
-            {
-                // Устанавливаем базовые параметры
-                // Здесь могут быть дополнительные настройки
-                // в зависимости от API Animal класса
-                
-                Debug.Log("NPC Animal component initialized successfully");
-            }
-            
-            // Пока что не работаем с сетевой системой
-            // В будущем можно добавить сетевую синхронизацию
-        }
+
     }
 }

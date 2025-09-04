@@ -47,6 +47,9 @@
     <Reference Include="0Harmony">
       <HintPath>$(STATIONEERS_INSTALL)\BepInEx\core\0Harmony.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(STATIONEERS_INSTALL)\rocketstation_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="EndGameTargetColonyMod.cs" />

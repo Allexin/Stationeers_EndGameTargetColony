@@ -22,11 +22,15 @@ namespace EndGameTargetColony
         {
             public float timer = 0f;
             public bool isCloning = false;
+            public bool hasCompleted = false; // Флаг что клонирование уже завершено
             public float maxDuration;
+            public float lastUpdateTime = 0f;
             
             public CloningState()
             {
                 maxDuration = EndGameTargetColonyMod.CloningDuration.Value;
+                timer = maxDuration; // Изначально таймер равен максимуму (0% прогресса)
+                lastUpdateTime = Time.time;
             }
         }
         
@@ -38,14 +42,26 @@ namespace EndGameTargetColony
             if (!cloningStates.ContainsKey(__instance))
             {
                 cloningStates[__instance] = new CloningState();
+                Debug.Log("CryoTube patch: Initialized new cloning state");
             }
             
             var state = cloningStates[__instance];
             
+            // Всегда обновляем время для корректного расчета deltaTime
+            float currentTime = Time.time;
+            float deltaTime = currentTime - state.lastUpdateTime;
+            state.lastUpdateTime = currentTime;
+            
             // Проверяем условия для клонирования
             bool canClone = CheckCloningConditions(__instance);
             
-            if (canClone)
+            // Логируем состояние каждые 5 секунд для отладки
+            if (Time.fixedTime % 5f < Time.fixedDeltaTime)
+            {
+                Debug.Log($"CryoTube state: canClone={canClone}, isCloning={state.isCloning}, hasCompleted={state.hasCompleted}, timer={state.timer:F1}");
+            }
+            
+            if (canClone && !state.hasCompleted)
             {
                 if (!state.isCloning)
                 {
@@ -54,23 +70,30 @@ namespace EndGameTargetColony
                     state.timer = state.maxDuration;
                 }
                 
-                // Уменьшаем таймер (используем deltaTime вместо fixedDeltaTime для более быстрого отсчета)
-                state.timer -= Time.deltaTime;
+                // Уменьшаем таймер на реальное время прошедшее с последнего вызова
+                // Ограничиваем deltaTime чтобы избежать больших скачков
+                float clampedDeltaTime = Mathf.Min(deltaTime, 1f);
+                state.timer -= clampedDeltaTime;
                 
-                if (state.timer <= 0f)
+                // Не даем таймеру уйти в отрицательные значения
+                state.timer = Mathf.Max(state.timer, 0f);
+                
+                if (state.timer <= 0f && !state.hasCompleted)
                 {
-                    // Клонирование завершено - создаем курицу
-                    CompleteCloning(__instance);
+                    // Клонирование завершено - сначала сбрасываем состояние, потом создаем курицу
+                    state.hasCompleted = true; // Помечаем что клонирование завершено
                     ResetCloning(state);
+                    CompleteCloning(__instance);
                 }
             }
-            else
+            else if (!canClone)
             {
-                // Условия не выполнены - сбрасываем таймер
-                if (state.isCloning)
-                {
-                    ResetCloning(state);
-                }
+                // Условия не выполнены - полностью сбрасываем состояние
+                state.isCloning = false;
+                state.hasCompleted = false; // Сбрасываем флаг завершения
+                state.maxDuration = EndGameTargetColonyMod.CloningDuration.Value;
+                state.timer = state.maxDuration; // Сбрасываем на 0% прогресса
+                state.lastUpdateTime = Time.time;
             }
             
             // Обновляем дисплей
@@ -102,13 +125,13 @@ namespace EndGameTargetColony
         {
             Debug.Log("NPC creation completed! Phase 1: Animal spawning");
             
-            // Создаем базовое существо (курицу) как первый этап НПЦ системы
-            NPCSpawner.SpawnNPC(cryoTube.transform.position);
-            
-            // Открываем дверь после завершения клонирования
-            if (!cryoTube.IsOpen)
+            try
             {
-                try
+                // Создаем базовое существо (курицу) как первый этап НПЦ системы
+                NPCSpawner.SpawnNPC(cryoTube.transform.position);
+                
+                // Открываем дверь после завершения клонирования
+                if (!cryoTube.IsOpen)
                 {
                     // Пытаемся найти и вызвать метод для открытия двери
                     var openField = typeof(CryoTube).GetField("Open", BindingFlags.Public | BindingFlags.Instance);
@@ -126,19 +149,23 @@ namespace EndGameTargetColony
                             }
                         }
                     }
+                    
                 }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning($"Failed to open CryoTube door automatically: {e.Message}");
-                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in CompleteCloning: {e.Message}");
+                Debug.LogError($"Stack trace: {e.StackTrace}");
             }
         }
         
         private static void ResetCloning(CloningState state)
         {
             state.isCloning = false;
-            state.timer = 0f;
             state.maxDuration = EndGameTargetColonyMod.CloningDuration.Value; // Обновляем из конфига
+            state.timer = state.maxDuration; // После завершения таймер сбрасывается на максимум (0% прогресса)
+            state.lastUpdateTime = Time.time; // Обновляем время последнего обновления
+            // НЕ сбрасываем hasCompleted - это предотвратит повторное клонирование
         }
         
         private static void UpdateDisplay(CryoTube cryoTube, CloningState state)
@@ -180,28 +207,38 @@ namespace EndGameTargetColony
         
         private static string GetCloningStatusText(CryoTube cryoTube, CloningState state)
         {
+            // Всегда показываем таймер для отладки
+            float progress = ((state.maxDuration - state.timer) / state.maxDuration) * 100f;
+            progress = Mathf.Clamp(progress, 0f, 100f);
+            
+            string baseStatus = $"Timer: {state.timer:F1}s Progress: {progress:F0}%";
+            
+            if (state.hasCompleted)
+            {
+                return baseStatus + " - Completed";
+            }
+            
             if (state.isCloning)
             {
-                float progress = ((state.maxDuration - state.timer) / state.maxDuration) * 100f;
-                return $"Cloning Status: Creating NPC ({progress:F0}%)";
+                return baseStatus + " - Creating NPC";
             }
             
             // Проверяем условия и показываем что не так
             if (!cryoTube.Powered)
-                return "Cloning Status: Not powered";
+                return baseStatus + " - Not powered";
             
             if (cryoTube.IsOpen)
-                return "Cloning Status: Door is open";
+                return baseStatus + " - Door is open";
             
             // Проверяем что внутри нет сущностей
             if (cryoTube.Slots != null && cryoTube.Slots.Count > 0)
             {
                 var sleeperSlot = cryoTube.Slots[0];
                 if (sleeperSlot != null && sleeperSlot.Get() != null)
-                    return "Cloning Status: Occupied";
+                    return baseStatus + " - Occupied";
             }
             
-            return "Cloning Status: Ready";
+            return baseStatus + " - Ready";
         }
         
         [HarmonyPatch("OnDestroy")]
