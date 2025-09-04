@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>EndGame Target Colony</Name>
+  <Author>EndGameTargetColony</Author>
+  <Version>0.1.0</Version>
+  <Description>Adds intelligent NPCs with complex behavior to Stationeers. Phase 1: Basic NPC spawning from CryoTube.</Description>
+  <WorkshopHandle>0</WorkshopHandle>
+  <Tags>
+    <Tag>NPC</Tag>
+    <Tag>AI</Tag>
+    <Tag>Automation</Tag>
+  </Tags>
+</ModMetadata>
