@@ -4,6 +4,7 @@ using Assets.Scripts.Objects.Entities;
 using Assets.Scripts.Objects.Items;
 using Assets.Scripts.Networking;
 using Assets.Scripts;
+using Assets.Scripts.Atmospherics;
 using System.Reflection;
 using System.Collections;
 
@@ -120,6 +121,7 @@ namespace EndGameTargetColony
                 if (chickenObject != null)
                 {
                     Debug.Log($"SUCCESS: Method 1 - Chicken spawned successfully at position: {spawnPosition}");
+                    InitializeChicken(chickenObject);
                     return true;
                 }
             }
@@ -144,6 +146,7 @@ namespace EndGameTargetColony
                     if (chickenComponent != null)
                     {
                         Debug.Log("Chicken component found on spawned object");
+                        InitializeChicken(chickenComponent);
                     }
                     return true;
                 }
@@ -165,6 +168,7 @@ namespace EndGameTargetColony
                 if (chickenObject != null)
                 {
                     Debug.Log($"SUCCESS: Method 3 - Chicken created by name at position: {spawnPosition}");
+                    InitializeChicken(chickenObject);
                     return true;
                 }
             }
@@ -185,6 +189,11 @@ namespace EndGameTargetColony
                 if (chickenObject != null)
                 {
                     Debug.Log($"SUCCESS: Method 4 - OnServer.CreateOld worked at position: {spawnPosition}");
+                    Chicken chickenComponent = chickenObject.GetComponent<Chicken>();
+                    if (chickenComponent != null)
+                    {
+                        InitializeChicken(chickenComponent);
+                    }
                     return true;
                 }
             }
@@ -271,6 +280,89 @@ namespace EndGameTargetColony
             return true;
         }
         
+        private static void InitializeChicken(Chicken chicken)
+        {
+            try
+            {
+                Debug.Log("InitializeChicken: Starting chicken initialization...");
+                
+                // Принудительно устанавливаем питание
+                chicken.Nutrition = chicken.BaseNutritionStorage; // 25f для курицы
+                Debug.Log($"Set chicken nutrition to: {chicken.Nutrition}");
+                
+                // Устанавливаем другие базовые параметры жизни
+                chicken.Hydration = 5f;
+                chicken.Mood = 1f;
+                chicken.Hygiene = 1f;
+                chicken.FoodQuality = 0.75f;
+                
+                // Устанавливаем продолжительность жизни (как у обычных курей)
+                chicken.LifeSpanInDays = 100f; // Долгая жизнь для тестирования
+                
+                Debug.Log("InitializeChicken: Basic parameters set");
+                
+                // Принудительно создаем органы если их нет
+                EnsureChickenOrgans(chicken);
+                
+                // Устанавливаем правильное состояние
+                chicken.Animalstate = Animal.AnimalStateEnum.Roam;
+                chicken.State = EntityState.Alive;
+                
+                Debug.Log("InitializeChicken: Chicken initialization completed successfully");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in InitializeChicken: {e.Message}");
+                Debug.LogError($"Stack trace: {e.StackTrace}");
+            }
+        }
+        
+        private static void EnsureChickenOrgans(Chicken chicken)
+        {
+            try
+            {
+                Debug.Log("EnsureChickenOrgans: Checking organs...");
+                
+                // Проверяем есть ли мозг
+                if (chicken.OrganBrain == null || chicken.BrainSlot == null || chicken.BrainSlot.Get() == null)
+                {
+                    Debug.Log("Creating brain for chicken...");
+                    var brain = OnServer.Create<Brain>(Prefab.Organ.Brain, chicken.BrainSlot);
+                    if (brain != null)
+                    {
+                        OnServer.SetCustomName(brain, chicken.DisplayName + "'s Brain");
+                        Debug.Log("Brain created successfully");
+                    }
+                }
+                
+                // Проверяем есть ли легкие
+                if (chicken.OrganLungs == null || chicken.LungsSlot == null || chicken.LungsSlot.Get() == null)
+                {
+                    Debug.Log("Creating lungs for chicken...");
+                    var lungs = OnServer.Create<Organ>(chicken.LungsPrefab, chicken.LungsSlot);
+                    if (lungs != null)
+                    {
+                        Debug.Log("Lungs created, filling with oxygen...");
+                        
+                        // Наполняем легкие кислородом (как в Animal.OnLifeCreated)
+                        var oneAtmosphere = Chemistry.OneAtmosphere;
+                        var twentyDegrees = Chemistry.Temperature.TwentyDegrees;
+                        var quantity = IdealGas.Quantity(oneAtmosphere, lungs.InternalAtmosphere.Volume, twentyDegrees);
+                        var energy = IdealGas.Energy(twentyDegrees, Mole.GetSpecificHeat(Chemistry.GasType.Oxygen), quantity);
+                        var gasMixture = new GasMixture(new Mole(Chemistry.GasType.Oxygen, quantity, energy));
+                        AtmosphericEventInstance.CreateAdd(lungs.InternalAtmosphere, gasMixture);
+                        Debug.Log("Lungs filled with oxygen successfully");
+                    }
+                }
+                
+                Debug.Log("EnsureChickenOrgans: Organ check completed");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in EnsureChickenOrgans: {e.Message}");
+                Debug.LogError($"Stack trace: {e.StackTrace}");
+            }
+        }
 
     }
 }
