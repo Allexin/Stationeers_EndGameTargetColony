@@ -120,20 +120,41 @@ namespace EndGameTargetColony
         
         private static void CompleteCloning(CryoTube cryoTube)
         {
-            Debug.Log("NPC creation completed! Phase 1: Animal spawning");
+            Debug.Log("NPC creation completed! Phase 1: Opening door and preparing spawn");
             
             try
             {
-                // Создаем базовое существо (курицу) как первый этап НПЦ системы
-                NPCSpawner.SpawnNPC(cryoTube.transform.position);
-                
-                // Пытаемся разными способами выключить трубу и открыть дверь
-                TryPowerOffCryoTube(cryoTube);
+                // Сначала открываем дверь и выключаем трубу
                 TryOpenCryoTubeDoor(cryoTube);
+                TryPowerOffCryoTube(cryoTube);
+                
+                // Затем запускаем отложенный спавн курицы через 1 секунду
+                EndGameTargetColonyMod.GetInstance().StartCoroutine(DelayedSpawnCoroutine(cryoTube.transform.position));
             }
             catch (System.Exception e)
             {
                 Debug.LogError($"Error in CompleteCloning: {e.Message}");
+                Debug.LogError($"Stack trace: {e.StackTrace}");
+            }
+        }
+        
+        private static System.Collections.IEnumerator DelayedSpawnCoroutine(Vector3 spawnPosition)
+        {
+            Debug.Log("DelayedSpawnCoroutine: Waiting 1 second before spawning...");
+            
+            // Ждем 1 секунду
+            yield return new WaitForSeconds(1f);
+            
+            Debug.Log("DelayedSpawnCoroutine: Now spawning NPC...");
+            
+            try
+            {
+                // Создаем базовое существо (курицу) как первый этап НПЦ системы
+                NPCSpawner.SpawnNPC(spawnPosition);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in DelayedSpawnCoroutine: {e.Message}");
                 Debug.LogError($"Stack trace: {e.StackTrace}");
             }
         }
