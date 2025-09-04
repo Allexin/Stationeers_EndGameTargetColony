@@ -376,6 +376,9 @@ namespace EndGameTargetColony
                 // Отключаем все существующие коллайдеры
                 DisableAllColliders(chicken);
                 
+                // Создаем trigger коллайдер для тултипов и UI взаимодействий
+                CreateUICollider(chicken);
+                
                 // Создаем новый маленький коллайдер в ногах для предотвращения проваливания
                 CreateGroundCollider(chicken);
                 
@@ -412,6 +415,36 @@ namespace EndGameTargetColony
             catch (System.Exception e)
             {
                 Debug.LogError($"Error in DisableAllColliders: {e.Message}");
+            }
+        }
+        
+        private static void CreateUICollider(Chicken chicken)
+        {
+            try
+            {
+                Debug.Log("CreateUICollider: Creating trigger collider for UI interactions...");
+                
+                // Создаем новый GameObject для UI коллайдера
+                GameObject uiColliderObj = new GameObject("NPCUICollider");
+                uiColliderObj.transform.SetParent(chicken.transform);
+                uiColliderObj.transform.localPosition = Vector3.zero; // В центре курицы
+                
+                // Создаем капсульный коллайдер (подходит для формы курицы)
+                CapsuleCollider uiCollider = uiColliderObj.AddComponent<CapsuleCollider>();
+                uiCollider.height = 0.5f; // Высота курицы
+                uiCollider.radius = 0.25f; // Радиус вокруг курицы
+                uiCollider.isTrigger = true; // ВАЖНО: trigger не создает физических столкновений
+                
+                Debug.Log($"CreateUICollider: Created UI trigger collider - height: {uiCollider.height}, radius: {uiCollider.radius}");
+                
+                // Устанавливаем слой Default для взаимодействия с raycast
+                uiColliderObj.layer = Layers.Default;
+                
+                Debug.Log("CreateUICollider: UI trigger collider created successfully");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in CreateUICollider: {e.Message}");
             }
         }
         
