@@ -308,6 +308,9 @@ namespace EndGameTargetColony
                 chicken.Animalstate = Animal.AnimalStateEnum.Roam;
                 chicken.State = EntityState.Alive;
                 
+                // Настраиваем коллизию для НПЦ
+                SetupNPCCollision(chicken);
+                
                 Debug.Log("InitializeChicken: Chicken initialization completed successfully");
             }
             catch (System.Exception e)
@@ -361,6 +364,87 @@ namespace EndGameTargetColony
             {
                 Debug.LogError($"Error in EnsureChickenOrgans: {e.Message}");
                 Debug.LogError($"Stack trace: {e.StackTrace}");
+            }
+        }
+        
+        private static void SetupNPCCollision(Chicken chicken)
+        {
+            try
+            {
+                Debug.Log("SetupNPCCollision: Starting collision setup for NPC...");
+                
+                // Отключаем все существующие коллайдеры
+                DisableAllColliders(chicken);
+                
+                // Создаем новый маленький коллайдер в ногах для предотвращения проваливания
+                CreateGroundCollider(chicken);
+                
+                Debug.Log("SetupNPCCollision: Collision setup completed successfully");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in SetupNPCCollision: {e.Message}");
+                Debug.LogError($"Stack trace: {e.StackTrace}");
+            }
+        }
+        
+        private static void DisableAllColliders(Chicken chicken)
+        {
+            try
+            {
+                Debug.Log("DisableAllColliders: Finding and disabling all colliders...");
+                
+                // Находим все коллайдеры на курице и дочерних объектах
+                var allColliders = chicken.GetComponentsInChildren<Collider>();
+                Debug.Log($"Found {allColliders.Length} colliders to disable");
+                
+                foreach (var collider in allColliders)
+                {
+                    if (collider != null)
+                    {
+                        collider.enabled = false;
+                        Debug.Log($"Disabled collider: {collider.name} on {collider.gameObject.name}");
+                    }
+                }
+                
+                Debug.Log("DisableAllColliders: All colliders disabled");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in DisableAllColliders: {e.Message}");
+            }
+        }
+        
+        private static void CreateGroundCollider(Chicken chicken)
+        {
+            try
+            {
+                Debug.Log("CreateGroundCollider: Creating small ground collision sphere...");
+                
+                // Создаем новый GameObject для коллайдера земли
+                GameObject groundColliderObj = new GameObject("NPCGroundCollider");
+                groundColliderObj.transform.SetParent(chicken.transform);
+                
+                // Позиционируем коллайдер в ногах курицы
+                // Смещаем вниз относительно центра курицы
+                Vector3 groundPosition = Vector3.down * 0.3f; // 30 см вниз от центра
+                groundColliderObj.transform.localPosition = groundPosition;
+                
+                // Создаем сферический коллайдер
+                SphereCollider groundCollider = groundColliderObj.AddComponent<SphereCollider>();
+                groundCollider.radius = 0.05f; // 5 см радиус
+                groundCollider.isTrigger = false; // Физический коллайдер для пола
+                
+                Debug.Log($"CreateGroundCollider: Created ground collider at position {groundPosition} with radius {groundCollider.radius}");
+                
+                // Устанавливаем слой Default для взаимодействия с полом
+                groundColliderObj.layer = Layers.Default;
+                
+                Debug.Log("CreateGroundCollider: Ground collider created successfully");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Error in CreateGroundCollider: {e.Message}");
             }
         }
 
