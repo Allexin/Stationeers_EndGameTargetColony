@@ -54,8 +54,8 @@ namespace EndGameTargetColony
                     state.timer = state.maxDuration;
                 }
                 
-                // Уменьшаем таймер
-                state.timer -= Time.fixedDeltaTime;
+                // Уменьшаем таймер (используем deltaTime вместо fixedDeltaTime для более быстрого отсчета)
+                state.timer -= Time.deltaTime;
                 
                 if (state.timer <= 0f)
                 {
@@ -104,6 +104,34 @@ namespace EndGameTargetColony
             
             // Создаем базовое существо (курицу) как первый этап НПЦ системы
             NPCSpawner.SpawnNPC(cryoTube.transform.position);
+            
+            // Открываем дверь после завершения клонирования
+            if (!cryoTube.IsOpen)
+            {
+                try
+                {
+                    // Пытаемся найти и вызвать метод для открытия двери
+                    var openField = typeof(CryoTube).GetField("Open", BindingFlags.Public | BindingFlags.Instance);
+                    if (openField != null)
+                    {
+                        var openSwitch = openField.GetValue(cryoTube);
+                        if (openSwitch != null)
+                        {
+                            // Устанавливаем состояние "включено" для переключателя открытия
+                            var onProperty = openSwitch.GetType().GetProperty("On");
+                            if (onProperty != null)
+                            {
+                                onProperty.SetValue(openSwitch, true);
+                                Debug.Log("CryoTube door opened after cloning completion");
+                            }
+                        }
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Failed to open CryoTube door automatically: {e.Message}");
+                }
+            }
         }
         
         private static void ResetCloning(CloningState state)
