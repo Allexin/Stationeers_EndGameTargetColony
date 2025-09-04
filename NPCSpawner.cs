@@ -4,6 +4,7 @@ using Assets.Scripts.Objects.Entities;
 using Assets.Scripts.Objects.Items;
 using Assets.Scripts.Networking;
 using Assets.Scripts;
+using System.Reflection;
 
 namespace EndGameTargetColony
 {
@@ -38,7 +39,29 @@ namespace EndGameTargetColony
                     
                     // Используем OnServer.CreateOld как в FertilizedEgg.Hatch()
                     Debug.Log("About to call OnServer.CreateOld...");
-                    OnServer.CreateOld(eggPrefab, spawnPosition, Quaternion.identity, 0uL);
+                    DynamicThing eggObject = OnServer.CreateOld(eggPrefab, spawnPosition, Quaternion.identity, 0uL);
+                    
+                    // Настраиваем яйцо для быстрого вылупления
+                    if (eggObject != null)
+                    {
+                        FertilizedEgg eggComponent = eggObject.GetComponent<FertilizedEgg>();
+                        if (eggComponent != null)
+                        {
+                            // Устанавливаем время вылупления на 5 секунд
+                            eggComponent.HatchTime = 5f;
+                            Debug.Log("Set HatchTime to 5 seconds");
+                            
+                            // Принудительно делаем яйцо жизнеспособным
+                            // Используем рефлексию для установки _viable = true
+                            var viableField = typeof(FertilizedEgg).GetField("_viable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                            if (viableField != null)
+                            {
+                                viableField.SetValue(eggComponent, true);
+                                Debug.Log("Set egg as viable");
+                            }
+                        }
+                    }
+                    
                     Debug.Log($"NPC Phase 1: FertilizedEgg spawned successfully at position: {spawnPosition}");
                 }
                 else
